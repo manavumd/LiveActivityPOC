@@ -13,6 +13,7 @@ import ActivityKit
 
 struct ContentView: View {
     @State private var activity: Activity<DemoActivityAttributes>? = nil
+    @State private var logText = "Waiting…"
     
     var body: some View {
         VStack(spacing: 20) {
@@ -55,16 +56,17 @@ struct ContentView: View {
             // Schedule auto-end
             Task {
                 try? await Task.sleep(nanoseconds: 125 * 1_000_000_000) // wait ~35s
-                let now = Date()
-                let finalState = DemoActivityAttributes.ContentState(endTime: now)
-                
-                await activity.end(
-                    ActivityContent(state: finalState, staleDate: now),
-                    dismissalPolicy: .after(now.addingTimeInterval(5))
-                )
-                print("👉 Live Activity auto-ended at \(now)")
-                
-                // ✅ End background task
+//                let now = Date()
+//                let finalState = DemoActivityAttributes.ContentState(endTime: now)
+//                
+//                await activity.end(
+//                    ActivityContent(state: finalState, staleDate: now),
+//                    dismissalPolicy: .after(now.addingTimeInterval(5))
+//                )
+//                print("👉 Live Activity auto-ended at \(now)")
+//                
+//                // ✅ End background task
+                await notifyServerToEnd(activityID: activity.id)
                 UIApplication.shared.endBackgroundTask(bgTaskID)
                 bgTaskID = .invalid
             }
@@ -77,19 +79,49 @@ struct ContentView: View {
     private func stopLiveActivity() {
         Task {
             if let activity = activity {
-                let now = Date()
-                let finalState = DemoActivityAttributes.ContentState(endTime: now)
-                
-                await activity.end(
-                    ActivityContent(state: finalState, staleDate: now),
-                    dismissalPolicy: .immediate
-                )
-                
-                print("Live Activity manually stopped at \(now)")
+//                let now = Date()
+//                let finalState = DemoActivityAttributes.ContentState(endTime: now)
+//                
+//                await activity.end(
+//                    ActivityContent(state: finalState, staleDate: now),
+//                    dismissalPolicy: .immediate
+//                )
+//                
+//                print("Live Activity manually stopped at \(now)")
+                await notifyServerToEnd(activityID: activity.id)
             } else {
                 print("No active Live Activity to stop")
             }
         }
     }
+    
+    private func notifyServerToEnd(activityID: String) async {
+            // Replace with your Webhook.site URL or any test API endpoint
+            guard let url = URL(string: "https://webhook.site/3b733246-90d1-4343-8f61-8542d2f99f61") else {
+                logText = "Invalid URL"
+                return
+            }
+            
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            
+            let body: [String: Any] = [
+                "activityID": activityID,
+                "timestamp": Date().description
+            ]
+            request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            
+            do {
+                let (_, response) = try await URLSession.shared.data(for: request)
+                if let httpResp = response as? HTTPURLResponse {
+                    logText = "Server notified at \(Date()) [status \(httpResp.statusCode)]"
+                } else {
+                    logText = "Server notified at \(Date())"
+                }
+            } catch {
+                logText = "Failed to notify server: \(error.localizedDescription)"
+            }
+        }
 
 }
